@@ -7,6 +7,7 @@ import typing
 from bosdyn.api.graph_nav import graph_nav_pb2, map_pb2, map_processing_pb2, nav_pb2
 from bosdyn.client.frame_helpers import get_odom_tform_body
 from bosdyn.client.graph_nav import GraphNavClient
+from bosdyn.client.recording import GraphNavRecordingServiceClient
 from bosdyn.client.lease import Lease, LeaseWallet
 from bosdyn.client.map_processing import MapProcessingServiceClient
 from bosdyn.client.robot import Robot
@@ -22,6 +23,7 @@ class SpotGraphNav:
         robot: Robot,
         logger: logging.Logger,
         graph_nav_client: GraphNavClient,
+        graph_nav_recording_client: GraphNavRecordingServiceClient,
         map_processing_client: MapProcessingServiceClient,
         robot_state_client: RobotStateClient,
         leash_context: SpotLeashContextProtocol,
@@ -31,6 +33,7 @@ class SpotGraphNav:
         self._graph_nav_client = graph_nav_client
         # TODO: re-enable streaming graph uploads when fixed upstream
         self._graph_nav_client._use_streaming_graph_upload = False
+        self._graph_nav_recording_client = graph_nav_recording_client
         self._map_processing_client = map_processing_client
         self._robot_state_client = robot_state_client
         self._lease_wallet: LeaseWallet = self._robot.lease_wallet
@@ -65,7 +68,13 @@ class SpotGraphNav:
         # List waypoint ids of graph_nav
         ids, eds = self._list_graph_waypoint_and_edge_ids()
 
-        return [v for _, v in sorted(ids.items(), key=lambda item: item[0])]
+        return [f"waypoint {i}: {v}" for i, (_, v) in enumerate(sorted(ids.items(), key=lambda item: item[0]))]
+
+    def start_recording(self):
+        self._graph_nav_recording_client.start_recording()
+
+    def stop_recording(self):
+        self._graph_nav_recording_client.stop_recording()
 
     def navigate_initial_localization(
         self,
@@ -597,8 +606,7 @@ class SpotGraphNav:
 
     def _clear_graph(self, *args) -> bool:
         """Clear the state of the map on the robot, removing all waypoints and edges in the RAM of the robot"""
-        self._lease = self._get_lease()
-        result = self._graph_nav_client.clear_graph(lease=self._lease.lease_proto)
+        result = self._graph_nav_client.clear_graph()
         self._init_current_graph_nav_state()
         return result
 

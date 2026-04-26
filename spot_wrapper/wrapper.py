@@ -44,6 +44,7 @@ from bosdyn.client.estop import (
     EstopKeepAlive,
 )
 from bosdyn.client.graph_nav import GraphNavClient
+from bosdyn.client.recording import GraphNavRecordingServiceClient
 from bosdyn.client.gripper_camera_param import GripperCameraParamClient
 from bosdyn.client.image import ImageClient
 from bosdyn.client.lease import Lease
@@ -459,6 +460,7 @@ class SpotWrapper:
                 self._world_objects_client = self._robot.ensure_client(WorldObjectClient.default_service_name)
                 self._robot_command_client = self._robot.ensure_client(RobotCommandClient.default_service_name)
                 self._graph_nav_client = self._robot.ensure_client(GraphNavClient.default_service_name)
+                self._graph_nav_recording_client = self._robot.ensure_client(GraphNavRecordingServiceClient.default_service_name)
                 self._map_processing_client = self._robot.ensure_client(MapProcessingServiceClient.default_service_name)
                 self._power_client = self._robot.ensure_client(PowerClient.default_service_name)
                 self._image_client = self._robot.ensure_client(ImageClient.default_service_name)
@@ -634,6 +636,7 @@ class SpotWrapper:
             self._robot,
             self._logger,
             self._graph_nav_client,
+            self._graph_nav_recording_client,
             self._map_processing_client,
             self._robot_state_client,
             self._spot_leash_context,
