@@ -65,10 +65,41 @@ class SpotGraphNav:
         self._current_anchors = {}  # maps anchor id to anchor
 
     def list_graph(self) -> typing.List[str]:
-        # List waypoint ids of graph_nav
-        ids, eds = self._list_graph_waypoint_and_edge_ids()
+        """Return waypoints sorted by creation timestamp (oldest -> newest).
 
-        return [f"waypoint {i}: {v}" for i, (_, v) in enumerate(sorted(ids.items(), key=lambda item: item[0]))]
+        Uses `waypoint.annotations.creation_time` when available, otherwise falls back to name/id.
+        """
+        graph = self._download_current_graph()
+        if graph is None:
+            return []
+
+        def _wp_sort_key(wp: map_pb2.Waypoint):
+            ts = -1.0
+            try:
+                ts = wp.annotations.creation_time.seconds + wp.annotations.creation_time.nanos / 1e9
+            except Exception:
+                # Older graphs may not have creation_time populated.
+                ts = -1.0
+            name = ""
+            try:
+                name = wp.annotations.name or ""
+            except Exception:
+                name = ""
+            return (ts, name, wp.id)
+
+        waypoints_sorted = sorted(graph.waypoints, key=_wp_sort_key)
+        out: typing.List[str] = []
+        for i, wp in enumerate(waypoints_sorted):
+            name = ""
+            try:
+                name = wp.annotations.name
+            except Exception:
+                name = ""
+            if name:
+                out.append(f"waypoint {i}: {name} ({wp.id})")
+            else:
+                out.append(f"waypoint {i}: {wp.id}")
+        return out
 
     def start_recording(self):
         self._graph_nav_recording_client.start_recording()
