@@ -4,6 +4,7 @@ import os
 import time
 import typing
 
+from bosdyn.api import geometry_pb2
 from bosdyn.api.graph_nav import graph_nav_pb2, map_pb2, map_processing_pb2, nav_pb2
 from bosdyn.client.frame_helpers import get_odom_tform_body
 from bosdyn.client.graph_nav import GraphNavClient
@@ -43,8 +44,10 @@ class SpotGraphNav:
             [
                 self._navigate_to,
                 self._navigate_route,
+                self._navigate_to_anchor,
                 self.navigate_through_route,
                 self.navigate_to_existing_waypoint,
+                self.navigate_to_anchor,
             ],
         )
 
@@ -154,6 +157,15 @@ class SpotGraphNav:
         self._get_localization_state()
         resp = self._navigate_to(waypoint_id)
         return resp
+
+    def navigate_to_anchor(self, seed_tform_goal: geometry_pb2.SE3Pose, cmd_duration: float = 1.0):
+        """Navigate to a pose in the seed frame.
+
+        This uses the Spot SDK `GraphNavClient.navigate_to_anchor()` RPC, which plans a route
+        to the provided `seed_tform_goal` (SE3Pose in seed frame).
+        """
+        self._get_localization_state()
+        return self._navigate_to_anchor(seed_tform_goal=seed_tform_goal, cmd_duration=cmd_duration)
 
     def navigate_through_route(self, waypoint_ids: typing.List[str]):
         """
@@ -579,6 +591,45 @@ class SpotGraphNav:
             return (
                 False,
                 "Robot got stuck when navigating the route, the robot will now sit down.",
+            )
+        elif status.status == graph_nav_pb2.NavigationFeedbackResponse.STATUS_ROBOT_IMPAIRED:
+            return False, "Robot is impaired."
+        else:
+            return False, "Navigation command is not complete yet."
+
+    def _navigate_to_anchor(
+        self, seed_tform_goal: geometry_pb2.SE3Pose, cmd_duration: float = 1.0
+    ) -> typing.Tuple[bool, str]:
+        """Navigate to a seed-frame pose using GraphNav route generation."""
+        # Create a new sublease for graphnav.
+        self._lease = self._lease_wallet.advance()
+        sublease = self._lease.create_sublease()
+
+        is_finished = False
+        nav_cmd_id = -1
+        while not is_finished:
+            nav_cmd_id = self._graph_nav_client.navigate_to_anchor(
+                seed_tform_goal=seed_tform_goal,
+                cmd_duration=cmd_duration,
+                leases=[sublease.lease_proto],
+            )
+            time.sleep(0.5)
+            is_finished = self._check_success(nav_cmd_id)
+
+        self._lease = self._lease_wallet.advance()
+
+        status = self._graph_nav_client.navigation_feedback(nav_cmd_id)
+        if status.status == graph_nav_pb2.NavigationFeedbackResponse.STATUS_REACHED_GOAL:
+            return True, "Successfully completed the navigation commands!"
+        elif status.status == graph_nav_pb2.NavigationFeedbackResponse.STATUS_LOST:
+            return (
+                False,
+                "Robot got lost when navigating to anchor, the robot will now sit down.",
+            )
+        elif status.status == graph_nav_pb2.NavigationFeedbackResponse.STATUS_STUCK:
+            return (
+                False,
+                "Robot got stuck when navigating to anchor, the robot will now sit down.",
             )
         elif status.status == graph_nav_pb2.NavigationFeedbackResponse.STATUS_ROBOT_IMPAIRED:
             return False, "Robot is impaired."
