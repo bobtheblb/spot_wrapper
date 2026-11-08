@@ -547,7 +547,9 @@ class SpotGraphNav:
                 "fiducial before attempting a navigation command."
             )
 
-    def _navigate_to(self, waypoint_id: str) -> typing.Tuple[bool, str]:
+    def _navigate_to(
+        self, waypoint_id: str, waypoint_tform_goal: typing.Optional[geometry_pb2.SE2Pose] = None
+    ) -> typing.Tuple[bool, str]:
         """Navigate to a specific waypoint."""
         destination_waypoint = self._find_unique_waypoint_id(
             waypoint_id,
@@ -572,7 +574,12 @@ class SpotGraphNav:
         while not is_finished:
             # Issue the navigation command about twice a second such that it is easy to terminate the
             # navigation command (with estop or killing the program).
-            nav_to_cmd_id = self._graph_nav_client.navigate_to(destination_waypoint, 1.0, leases=[sublease.lease_proto])
+            nav_to_cmd_id = self._graph_nav_client.navigate_to(
+                destination_waypoint,
+                1.0,
+                leases=[sublease.lease_proto],
+                destination_waypoint_tform_body_goal=waypoint_tform_goal,
+            )
             time.sleep(0.5)  # Sleep for half a second to allow for command execution.
             # Poll the robot for feedback to determine if the navigation command is complete.
             is_finished = self._check_success(nav_to_cmd_id)
